@@ -166,7 +166,7 @@ def do_checkin(session, headers):
         or "today's observation logged" in message_lower
         or "return tomorrow" in message_lower
     ):
-    return "repeat", message, points
+        return "repeat", message, points
 
     # 签到成功
     if (
