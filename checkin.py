@@ -163,8 +163,10 @@ def do_checkin(session, headers):
         "checkin repeats" in message_lower
         or "please try tomorrow" in message_lower
         or "repeats" in message_lower
+        or "today's observation logged" in message_lower
+        or "return tomorrow" in message_lower
     ):
-        return "repeat", message, points
+    return "repeat", message, points
 
     # 签到成功
     if (
