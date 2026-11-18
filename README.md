@@ -1,11 +1,13 @@
 ### 2026-11 签到接口说明
 
+默认域名为用户实际使用的 `https://glados.network`，可通过 `GLADOS_BASE_URL` 选择 `https://glados.cloud` 或 `https://glados.rocks`。
 默认模式使用独立 Chrome 进程打开官网签到页，让页面自行完成 challenge、验证和表单提交。
 每个账号使用临时浏览器会话；不会连接你正在使用的浏览器，也不会读取或修改你的个人浏览器配置。
 脚本只点击一次签到按钮，以官网真实 POST 响应判断结果；不会控制验证组件、伪造验证令牌或在结果不确定时反复提交。
 GitHub Actions 使用 Windows runner 上预装的 Chrome。脚本可在本机运行，但需要安装 Chrome。
 
 `GLADOS_BROWSER_CHANNEL` 可设为 `chrome`（默认）或 `msedge`；`GLADOS_BROWSER_HEADLESS` 默认为 `false`。
+需要使用已有代理时，单独为脚本配置 `GLADOS_BROWSER_PROXY`，例如本机 HTTP 代理地址；不会修改系统或个人浏览器设置。代理地址不支持内嵌用户名密码，避免凭据暴露在进程参数中。
 `CHECKIN_MODE=http` 可显式选择纯 HTTP 模式；该模式在服务端要求 Turnstile 时停止提交，返回退出码 2。
 无论在哪运行，都不保证 Cloudflare 每天放行；官网返回“今日已签”只确认已有记录，不代表本次新增积分。
 日志中的 `tsState` 和 `turnstile_present` 仅显示验证状态，不输出验证令牌、Cookie 或浏览器截图。

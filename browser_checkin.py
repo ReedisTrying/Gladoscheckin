@@ -94,12 +94,12 @@ def standalone_context(playwright, channel, headless=False, user_agent=None, pro
                         "--no-default-browser-check", "--new-window", "--window-size=1200,900", "about:blank"]
             if headless:
                 args.insert(-1, "--headless=new")
-                proxy = os.environ.get("GLADOS_BROWSER_PROXY", "").strip()
-                if proxy:
-                    parsed = urlsplit(proxy)
-                    if parsed.scheme not in ("http", "https", "socks5") or not parsed.hostname or parsed.username or parsed.password:
-                        raise RuntimeError("Unsupported browser proxy configuration")
-                    args.insert(-1, f"--proxy-server={proxy}")
+            proxy = os.environ.get("GLADOS_BROWSER_PROXY", "").strip()
+            if proxy:
+                parsed = urlsplit(proxy)
+                if parsed.scheme not in ("http", "https", "socks5") or not parsed.hostname or parsed.username or parsed.password:
+                    raise RuntimeError("Unsupported browser proxy configuration")
+                args.insert(-1, f"--proxy-server={proxy}")
             active_port = profile / "DevToolsActivePort"
             active_port.unlink(missing_ok=True)
             process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -192,14 +192,23 @@ def browser_checkin(cookie, user_agent=None):
     # Only a newly launched process with a unique empty profile can be used.
     channel = os.environ.get("GLADOS_BROWSER_CHANNEL", "chrome").strip()
     headless = os.environ.get("GLADOS_BROWSER_HEADLESS", "false").lower() == "true"
+    stage = "startup"
     try:
+        print("浏览器: 启动独立进程", flush=True)
         with sync_playwright() as playwright:
             with standalone_context(playwright, channel, headless, user_agent) as context:
+                stage = "cookie-setup"
                 context.add_cookies(parse_cookies(cookie))
+                stage = "official-page"
                 return submit_page(context)
     except TimeoutError:
         return {"code": -1, "reason": "browser-timeout",
                 "message": "官网浏览器流程超时，结果不确定；请核对官网记录，不会自动再次提交。"}
-    except (Error, OSError, RuntimeError, ValueError):
+    except (Error, OSError, RuntimeError, ValueError) as error:
         # Playwright exceptions can include cookie-bearing request diagnostics.
+        hint = re.search(r"net::[A-Z_]+|ECONNREFUSED|ECONNRESET|ENOTFOUND", str(error))
+        print(f"浏览器: 失败阶段={stage} 类型={type(error).__name__} 网络类别={hint.group() if hint else 'none'}", flush=True)
+        if stage == "startup":
+            # No account cookie has been injected at this point.
+            print("浏览器: 启动诊断=" + str(error).splitlines()[0][:300], flush=True)
         return {"code": -1, "reason": "browser-error"}

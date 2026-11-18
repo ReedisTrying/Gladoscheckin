@@ -50,4 +50,9 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as error:
+        # Network exception traces may contain session request headers.
+        print(f"本机独立浏览器: 运行异常 {type(error).__name__}，未打印请求头或登录信息。", flush=True)
+        raise SystemExit(1) from None

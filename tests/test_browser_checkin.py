@@ -7,6 +7,24 @@ import browser_checkin
 
 
 class BrowserTests(unittest.TestCase):
+    def test_proxy_is_applied_to_a_headed_browser(self):
+        class StopBeforeLaunch(Exception):
+            pass
+        with patch.dict("os.environ", {"GLADOS_BROWSER_PROXY": "http://127.0.0.1:7890"}), patch("browser_checkin.browser_executable", return_value="fixture.exe"), patch("browser_checkin.subprocess.Popen", side_effect=StopBeforeLaunch) as start:
+            with self.assertRaises(StopBeforeLaunch):
+                with browser_checkin.standalone_context(Mock(), "msedge", headless=False):
+                    self.fail("Must stop before a real process is launched")
+            args = start.call_args.args[0]
+            self.assertIn("--proxy-server=http://127.0.0.1:7890", args)
+            self.assertNotIn("--headless=new", args)
+
+    def test_proxy_credentials_are_rejected_before_launch(self):
+        with patch.dict("os.environ", {"GLADOS_BROWSER_PROXY": "http://user:private@localhost:7890"}), patch("browser_checkin.browser_executable", return_value="fixture.exe"), patch("browser_checkin.subprocess.Popen") as start:
+            with self.assertRaises(RuntimeError):
+                with browser_checkin.standalone_context(Mock(), "msedge"):
+                    self.fail("Must not put proxy credentials on the command line")
+            start.assert_not_called()
+
     def test_refuses_existing_unowned_profile_without_starting_browser(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "personal-data").write_text("fixture", encoding="utf-8")
