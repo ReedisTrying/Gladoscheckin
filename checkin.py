@@ -4,6 +4,7 @@ import hashlib
 import time
 import math
 import requests
+from browser_checkin import browser_checkin
 
 
 # ============================================================
@@ -223,8 +224,10 @@ def process_account(cookie, index, user_agent=None, status_only=False):
 
         if status_only:
             result_type, check_message, points = "status", "仅查询账户状态，未执行签到", 0
-        else:
+        elif os.environ.get("CHECKIN_MODE", "browser") == "http":
             result_type, check_message, points = do_checkin(session, headers)
+        else:
+            result_type, check_message, points = classify_checkin(browser_checkin(cookie, user_agent))
 
         email, leftdays, status_error = get_account_status(
             session,

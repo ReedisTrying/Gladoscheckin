@@ -15,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'checkin.py'
+      - 'browser_checkin.py'
       - 'tests/**'
       - 'requirements.txt'
       - '.github/workflows/**'
@@ -55,7 +56,7 @@ jobs:
     name: glados checkin
     needs: test
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     timeout-minutes: 10
 
@@ -81,6 +82,9 @@ jobs:
         run: python checkin.py
         env:
           PYTHONUTF8: '1'
+          CHECKIN_MODE: browser
+          GLADOS_BROWSER_CHANNEL: chrome
+          GLADOS_BROWSER_HEADLESS: 'false'
           SENDKEY: ${{ (github.event_name != 'workflow_dispatch' || inputs.notify) && secrets.SENDKEY || '' }}
           COOKIES: ${{ secrets.COOKIES }}
           USER_AGENTS: ${{ secrets.USER_AGENTS }}
