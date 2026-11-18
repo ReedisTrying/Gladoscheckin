@@ -13,7 +13,9 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from urllib.parse import urlsplit
 
-BASE_URL = "https://glados.cloud"
+BASE_URL = os.environ.get("GLADOS_BASE_URL", "https://glados.network").rstrip("/")
+if BASE_URL not in {"https://glados.network", "https://glados.cloud", "https://glados.rocks"}:
+    raise ValueError("Unsupported official GLaDOS URL")
 CHECKIN_PATH = "/api/user/checkin"
 BUTTON_NAME = re.compile(r"^(check\s*in|签到|立即签到)$", re.IGNORECASE)
 
@@ -89,9 +91,15 @@ def standalone_context(playwright, channel, headless=False, user_agent=None, pro
         with profile_lock(profile):
             args = [executable, f"--user-data-dir={profile}", "--remote-debugging-port=0",
                     "--remote-debugging-address=127.0.0.1", "--no-first-run",
-                    "--no-default-browser-check", "about:blank"]
+                        "--no-default-browser-check", "--new-window", "--window-size=1200,900", "about:blank"]
             if headless:
                 args.insert(-1, "--headless=new")
+                proxy = os.environ.get("GLADOS_BROWSER_PROXY", "").strip()
+                if proxy:
+                    parsed = urlsplit(proxy)
+                    if parsed.scheme not in ("http", "https", "socks5") or not parsed.hostname or parsed.username or parsed.password:
+                        raise RuntimeError("Unsupported browser proxy configuration")
+                    args.insert(-1, f"--proxy-server={proxy}")
             active_port = profile / "DevToolsActivePort"
             active_port.unlink(missing_ok=True)
             process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -136,13 +144,23 @@ def parse_cookies(header):
 
 def is_checkin_response(response):
     url = urlsplit(response.url)
-    return (url.scheme == "https" and url.netloc == "glados.cloud"
+    return (url.scheme == "https" and url.netloc == urlsplit(BASE_URL).netloc
             and url.path == CHECKIN_PATH and response.request.method == "POST")
 
 
 def submit_page(context):
     """Submit once; never retry a click whose outcome may be unknown."""
     page = context.new_page()
+    def console_diagnostic(message):
+        match = re.search(r"[Tt]urnstile.*?[Ee]rror[^0-9]*(\d{5,6})", message.text)
+        if match:
+            print(f"浏览器: Cloudflare 组件错误码={match.group(1)}", flush=True)
+    def network_diagnostic(request):
+        if urlsplit(request.url).netloc == "challenges.cloudflare.com":
+            error = re.search(r"net::[A-Z_]+", request.failure or "")
+            print(f"浏览器: 验证组件网络失败={error.group() if error else 'request-failed'}", flush=True)
+    page.on("console", console_diagnostic)
+    page.on("requestfailed", network_diagnostic)
     page.set_default_timeout(45_000)
     print("浏览器: 打开官网签到页", flush=True)
     page.goto(BASE_URL + "/console/checkin", wait_until="domcontentloaded", timeout=45_000)

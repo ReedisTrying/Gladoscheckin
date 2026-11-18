@@ -27,13 +27,13 @@ class BrowserTests(unittest.TestCase):
         cookies = browser_checkin.parse_cookies("gld:sess=abc==; gld:sess.sig=xyz; ")
         self.assertEqual(len(cookies), 2)
         self.assertEqual(cookies[0]["value"], "abc==")
-        self.assertTrue(all(c["url"] == "https://glados.cloud/" for c in cookies))
+        self.assertTrue(all(c["url"] == browser_checkin.BASE_URL + "/" for c in cookies))
 
     def test_response_must_be_post_to_exact_official_endpoint(self):
         for url, method, expected in (
-            ("https://glados.cloud/api/user/checkin", "POST", True),
-            ("https://glados.cloud/api/user/checkin/challenge", "GET", False),
-            ("https://glados.cloud/api/user/checkin", "GET", False),
+            (browser_checkin.BASE_URL + "/api/user/checkin", "POST", True),
+            (browser_checkin.BASE_URL + "/api/user/checkin/challenge", "GET", False),
+            (browser_checkin.BASE_URL + "/api/user/checkin", "GET", False),
             ("https://glados.cloud.attacker.invalid/api/user/checkin", "POST", False),
         ):
             with self.subTest(url=url, method=method):

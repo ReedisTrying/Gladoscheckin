@@ -89,6 +89,7 @@ jobs:
         run: python checkin.py
         env:
           PYTHONUTF8: '1'
+          GLADOS_BASE_URL: https://glados.network
           CHECKIN_MODE: browser
           GLADOS_BROWSER_CHANNEL: ${{ inputs.browser_channel || 'chrome' }}
           GLADOS_BROWSER_HEADLESS: 'false'

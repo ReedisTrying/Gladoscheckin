@@ -4,14 +4,13 @@ import hashlib
 import time
 import math
 import requests
-from browser_checkin import browser_checkin
+from browser_checkin import BASE_URL, browser_checkin
+from urllib.parse import urlsplit
 
 
 # ============================================================
 # GLaDOS 配置
 # ============================================================
-
-BASE_URL = "https://glados.cloud"
 
 CHECKIN_URL = f"{BASE_URL}/api/user/checkin"
 CHALLENGE_URL = f"{CHECKIN_URL}/challenge"
@@ -27,7 +26,7 @@ USER_AGENT = (
 )
 
 CHECKIN_PAYLOAD = {
-    "token": "glados.cloud"
+    "token": urlsplit(BASE_URL).hostname
 }
 
 TIMEOUT = 20

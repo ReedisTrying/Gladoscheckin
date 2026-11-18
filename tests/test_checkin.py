@@ -49,7 +49,7 @@ class CheckinTests(unittest.TestCase):
         sleep.assert_called_once_with(2.5)
         args = self.session.post.call_args.kwargs
         self.assertEqual(args["json"], {
-            "token": "glados.cloud", "nonce": "test-nonce",
+            "token": "glados.network", "nonce": "test-nonce",
             "proof": "e60cd42961dd78f51c69a0df365df12a53d39a4988be5a524ba816d7ee94a7c6", "tsState": "off",
         })
         self.session.post.assert_called_once()

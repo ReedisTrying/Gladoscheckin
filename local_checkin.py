@@ -14,6 +14,7 @@ from checkin import classify_checkin
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--login", action="store_true", help="Wait for you to sign in in the NEW dedicated window")
+    parser.add_argument("--setup", action="store_true", help="Keep the dedicated window open for first-time user verification")
     parser.add_argument("--profile", default=str(Path(os.environ["LOCALAPPDATA"]) / "GLaDOSCheckin" / "BrowserProfile"))
     parser.add_argument("--channel", default="msedge", choices=("chrome", "msedge"))
     args = parser.parse_args()
@@ -21,6 +22,15 @@ def main():
         with standalone_context(playwright, args.channel, profile_directory=args.profile) as context:
             page = context.new_page()
             page.goto(BASE_URL + "/console/checkin", wait_until="domcontentloaded", timeout=45_000)
+            if args.setup:
+                complete = Path(args.profile) / ".setup-complete"
+                complete.unlink(missing_ok=True)
+                print("专用 Edge 窗口已打开并保持：请在新窗口正常签到、完成必要验证。", flush=True)
+                deadline = time.monotonic() + 900
+                while not complete.is_file() and time.monotonic() < deadline:
+                    page.wait_for_timeout(1000)
+                print("专用窗口首次设置结束；下一步需要独立自动运行验证。", flush=True)
+                return 0 if complete.is_file() else 2
             deadline = time.monotonic() + (600 if args.login else 5)
             print("本机独立浏览器: 等待官网登录；仅操作新建的专用窗口。", flush=True)
             while True:
