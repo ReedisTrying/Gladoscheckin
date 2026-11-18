@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import browser_checkin
 
@@ -23,7 +23,7 @@ class BrowserTests(unittest.TestCase):
                 self.assertEqual(browser_checkin.is_checkin_response(response), expected)
 
     def test_submit_clicks_once_and_reads_real_response(self):
-        context = Mock()
+        context = MagicMock()
         page = context.new_page.return_value
         response = page.expect_response.return_value.__enter__.return_value.value
         response.status = 200
@@ -33,7 +33,7 @@ class BrowserTests(unittest.TestCase):
         page.goto.assert_called_once()
 
     def test_invalid_json_object_is_not_success(self):
-        context = Mock()
+        context = MagicMock()
         response = context.new_page.return_value.expect_response.return_value.__enter__.return_value.value
         response.status = 200
         response.json.return_value = []
