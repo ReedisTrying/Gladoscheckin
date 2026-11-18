@@ -27,6 +27,7 @@ class BrowserTests(unittest.TestCase):
         page = context.new_page.return_value
         response = page.expect_response.return_value.__enter__.return_value.value
         response.status = 200
+        response.request.post_data_json = {"tsState": "ok", "turnstile": "dummy", "nonce": "dummy"}
         response.json.return_value = {"code": 0, "points": 10}
         self.assertEqual(browser_checkin.submit_page(context), {"code": 0, "points": 10})
         page.get_by_role.return_value.first.click.assert_called_once()

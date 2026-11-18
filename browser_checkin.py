@@ -43,6 +43,11 @@ def submit_page(context):
     with page.expect_response(is_checkin_response, timeout=150_000) as pending:
         button.click(timeout=45_000)
     response = pending.value
+    payload = response.request.post_data_json
+    if isinstance(payload, dict):
+        state = payload.get("tsState")
+        state = state if state in ("ok", "off", "error", "timeout") else "unknown"
+        print(f"浏览器: 官网请求 tsState={state} turnstile_present={bool(payload.get('turnstile'))} nonce_present={bool(payload.get('nonce'))}", flush=True)
     if response.status != 200:
         return {"code": -1, "reason": "browser-http-error", "http_status": response.status}
     result = response.json()
