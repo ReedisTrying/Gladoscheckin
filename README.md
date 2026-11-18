@@ -23,6 +23,16 @@ Actions 的 **Run workflow** 提供 `status_only`：勾选后只读查询，不�
 
 本地回归检查：`python -m unittest discover -s tests -v`。PR 的测试不读取账号 Secrets，也不访问签到接口。
 
+### 本机专用浏览器模式
+
+当云端浏览器仍无法完成验证时，可在 Windows 本机运行 `python local_checkin.py --login`。
+请在脚本新建的专用窗口中登录一次；脚本不会填写密码或操作人机验证组件。
+登录状态只保存在专用浏览器目录（默认 `%LOCALAPPDATA%/GLaDOSCheckin/BrowserProfile`），不导出 Cookie。
+之后执行 `python local_checkin.py` 会使用该专用配置完成官网正常签到；本机运行需要电脑开机和可用桌面会话。
+此入口不改变 GitHub Actions 的执行环境，不等于已经部署本机定时任务。
+目录带所有权标记，拒绝使用已有的个人浏览器目录；并发运行同一个专用配置会立即停止。
+本机离线浏览器检查：`python -m unittest discover -s tests -p browser_smoke.py -v`，不访问真实签到接口。
+
 ### 添加**secret**
 
 1. 跳转至自己的仓库的`Settings`->`Secrets and variables`->`Action`

@@ -9,7 +9,7 @@ import re
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -33,7 +33,37 @@ def browser_executable(channel):
 
 
 @contextmanager
-def standalone_context(playwright, channel, headless=False, user_agent=None):
+def profile_lock(profile):
+    """Prevent overlapping local runs; the OS releases the lock after a crash."""
+    with open(profile / ".glados-run.lock", "a+b") as lock:
+        if lock.tell() == 0:
+            lock.write(b"0")
+            lock.flush()
+        lock.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            try:
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
+                raise RuntimeError("Dedicated browser profile is already in use") from None
+        else:
+            import fcntl
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                raise RuntimeError("Dedicated browser profile is already in use") from None
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+@contextmanager
+def standalone_context(playwright, channel, headless=False, user_agent=None, profile_directory=None):
     """Start our own browser and attach only to its randomly assigned local port.
 
     A unique empty profile prevents Chrome from reusing a personal browser.
@@ -41,42 +71,55 @@ def standalone_context(playwright, channel, headless=False, user_agent=None):
     """
     executable = browser_executable(channel)
     temp_root = Path(tempfile.gettempdir()).resolve()
-    with tempfile.TemporaryDirectory(prefix="glados-browser-", dir=temp_root) as directory:
+    if profile_directory:
+        owned = Path(profile_directory).resolve()
+        owned.mkdir(parents=True, exist_ok=True)
+        marker = owned / ".glados-checkin-profile"
+        if not marker.is_file():
+            if any(owned.iterdir()):
+                raise RuntimeError("Refusing to use an existing personal browser profile")
+            marker.write_text("Dedicated GLaDOS check-in browser only\n", encoding="utf-8")
+        directory_context = nullcontext(str(owned))
+    else:
+        directory_context = tempfile.TemporaryDirectory(prefix="glados-browser-", dir=temp_root)
+    with directory_context as directory:
         profile = Path(directory).resolve()
-        if profile.parent != temp_root or not profile.name.startswith("glados-browser-"):
+        if not profile_directory and (profile.parent != temp_root or not profile.name.startswith("glados-browser-")):
             raise RuntimeError("Unexpected temporary profile location")
-        args = [executable, f"--user-data-dir={profile}", "--remote-debugging-port=0",
-                "--remote-debugging-address=127.0.0.1", "--no-first-run",
-                "--no-default-browser-check", "about:blank"]
-        if headless:
-            args.insert(-1, "--headless=new")
-        process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        browser = None
-        try:
+        with profile_lock(profile):
+            args = [executable, f"--user-data-dir={profile}", "--remote-debugging-port=0",
+                    "--remote-debugging-address=127.0.0.1", "--no-first-run",
+                    "--no-default-browser-check", "about:blank"]
+            if headless:
+                args.insert(-1, "--headless=new")
             active_port = profile / "DevToolsActivePort"
-            deadline = time.monotonic() + 30
-            while not active_port.is_file():
-                if time.monotonic() >= deadline or process.poll() is not None:
-                    raise RuntimeError("Independent browser did not start")
-                time.sleep(0.1)
-            port = int(active_port.read_text(encoding="utf-8").splitlines()[0])
-            if not 1 <= port <= 65535:
-                raise RuntimeError("Invalid browser debugging port")
-            browser = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", timeout=15_000)
-            context = browser.new_context(user_agent=user_agent) if user_agent else browser.contexts[0]
-            yield context
-        finally:
-            if browser:
-                try:
-                    browser.new_browser_cdp_session().send("Browser.close")
-                except Exception:
-                    pass
-                browser.close()
+            active_port.unlink(missing_ok=True)
+            process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            browser = None
             try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                process.wait(timeout=10)
+                deadline = time.monotonic() + 30
+                while not active_port.is_file():
+                    if time.monotonic() >= deadline or process.poll() is not None:
+                        raise RuntimeError("Independent browser did not start")
+                    time.sleep(0.1)
+                port = int(active_port.read_text(encoding="utf-8").splitlines()[0])
+                if not 1 <= port <= 65535:
+                    raise RuntimeError("Invalid browser debugging port")
+                browser = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", timeout=15_000)
+                context = browser.new_context(user_agent=user_agent) if user_agent else browser.contexts[0]
+                yield context
+            finally:
+                if browser:
+                    try:
+                        browser.new_browser_cdp_session().send("Browser.close")
+                    except Exception:
+                        pass
+                    browser.close()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.terminate()
+                    process.wait(timeout=10)
 
 
 def parse_cookies(header):

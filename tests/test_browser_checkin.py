@@ -1,10 +1,28 @@
 import unittest
-from unittest.mock import MagicMock, Mock
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
 
 import browser_checkin
 
 
 class BrowserTests(unittest.TestCase):
+    def test_refuses_existing_unowned_profile_without_starting_browser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "personal-data").write_text("fixture", encoding="utf-8")
+            with patch("browser_checkin.browser_executable", return_value="fixture.exe"), patch("browser_checkin.subprocess.Popen") as start:
+                with self.assertRaises(RuntimeError):
+                    with browser_checkin.standalone_context(Mock(), "chrome", profile_directory=directory):
+                        self.fail("Must not use an existing personal profile")
+                start.assert_not_called()
+
+    def test_profile_lock_prevents_concurrent_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with browser_checkin.profile_lock(Path(directory)):
+                with self.assertRaises(RuntimeError):
+                    with browser_checkin.profile_lock(Path(directory)):
+                        self.fail("Concurrent runs must not control the same profile")
+
     def test_cookies_preserve_equals_and_bind_to_official_host(self):
         cookies = browser_checkin.parse_cookies("gld:sess=abc==; gld:sess.sig=xyz; ")
         self.assertEqual(len(cookies), 2)
