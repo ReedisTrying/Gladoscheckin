@@ -44,6 +44,7 @@ def submit_page(context):
         button.click(timeout=45_000)
     response = pending.value
     payload = response.request.post_data_json
+    state = "unknown"
     if isinstance(payload, dict):
         state = payload.get("tsState")
         state = state if state in ("ok", "off", "error", "timeout") else "unknown"
@@ -53,6 +54,7 @@ def submit_page(context):
     result = response.json()
     if not isinstance(result, dict):
         return {"code": -1, "reason": "browser-invalid-response"}
+    result = {**result, "_browser_verification": state}
     print(f"浏览器: 官网签到响应 code={result.get('code')} reason={result.get('reason') or 'none'} repeated={result.get('repeated') is True}", flush=True)
     return result
 

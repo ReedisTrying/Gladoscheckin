@@ -11,6 +11,13 @@ on:
         description: '手动运行时发送 PushDeer 通知'
         type: boolean
         default: false
+      browser_channel:
+        description: '独立浏览器'
+        type: choice
+        default: chrome
+        options:
+          - chrome
+          - msedge
 
   pull_request:
     paths:
@@ -83,7 +90,7 @@ jobs:
         env:
           PYTHONUTF8: '1'
           CHECKIN_MODE: browser
-          GLADOS_BROWSER_CHANNEL: chrome
+          GLADOS_BROWSER_CHANNEL: ${{ inputs.browser_channel || 'chrome' }}
           GLADOS_BROWSER_HEADLESS: 'false'
           SENDKEY: ${{ (github.event_name != 'workflow_dispatch' || inputs.notify) && secrets.SENDKEY || '' }}
           COOKIES: ${{ secrets.COOKIES }}

@@ -27,5 +27,5 @@ class BrowserSmoke(unittest.TestCase):
             ) as browser:
                 with browser.new_context() as context:
                     context.route(BASE_URL + "/**", fixture)
-                    self.assertEqual(submit_page(context), {"code": 0, "points": 10})
+                    self.assertEqual(submit_page(context), {"code": 0, "points": 10, "_browser_verification": "unknown"})
         self.assertEqual(submissions, [BASE_URL + CHECKIN_PATH])

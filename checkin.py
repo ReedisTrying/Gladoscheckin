@@ -159,6 +159,8 @@ def classify_checkin(result):
         return "fail", "签到响应含失败信息，请先核对官网记录。", 0
     repeat_markers = ("checkin repeats", "please try tomorrow", "already check", "already signed")
     if result.get("repeated") is True or any(x in lower for x in repeat_markers):
+        if result.get("_browser_verification") in ("timeout", "error", "unknown"):
+            return "blocked", "今日已有签到记录，但本次浏览器验证未完成，尚未验证自动签到能力。", 0
         return "repeat", message or "今日已签到", 0
     if code not in (0, "0"):
         return "fail", f"签到被拒绝 (code={code})", 0

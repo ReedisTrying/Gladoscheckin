@@ -85,6 +85,11 @@ class CheckinTests(unittest.TestCase):
             "code": 0, "message": "Today's observation logged. Return tomorrow.", "points": 12,
         })[0], "success")
 
+    def test_existing_record_does_not_prove_browser_verification(self):
+        self.assertEqual(checkin.classify_checkin({
+            "code": 1, "repeated": True, "_browser_verification": "timeout",
+        })[0], "blocked")
+
     def test_repeated_flag_and_legacy_repeat(self):
         for body in ({"code": 0, "repeated": True, "points": 100},
                      {"code": 1, "message": "Checkin Repeats! Please Try Tomorrow!"}):
