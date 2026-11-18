@@ -1,4 +1,4 @@
-name: auto check
+name: GLaDOS validation
 
 on:
   workflow_dispatch:
@@ -34,9 +34,6 @@ on:
       - 'README.md'
       - 'imgs/**'
 
-  schedule:
-    - cron: '7 12,18 * * *'
-      timezone: 'Asia/Shanghai'
 
 
 concurrency:
@@ -62,7 +59,7 @@ jobs:
   checkin:
     name: glados checkin
     needs: test
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
 
     timeout-minutes: 10
@@ -97,46 +94,3 @@ jobs:
           COOKIES: ${{ secrets.COOKIES }}
           USER_AGENTS: ${{ secrets.USER_AGENTS }}
           CHECKIN_STATUS_ONLY: ${{ inputs.status_only || false }}
-
-
-  keepalive:
-    name: Keep workflow alive
-
-    if: github.event_name == 'schedule'
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      actions: write
-      contents: read
-
-    steps:
-
-      - name: Keep scheduled workflow alive
-        uses: liskin/gh-workflow-keepalive@v1
-
-
-  cleanup:
-    name: Delete old workflow runs
-
-    if: always() && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-
-    needs:
-      - checkin
-
-    runs-on: ubuntu-latest
-
-    permissions:
-      actions: write
-      contents: read
-
-    steps:
-
-      - name: Delete old workflow runs
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 7
-          keep_minimum_runs: 10
-          delete_run_by_conclusion_pattern: success
