@@ -7,6 +7,7 @@ controlled. The official page performs its own challenge and submission.
 import os
 import re
 import subprocess
+import socket
 import tempfile
 import time
 from contextlib import contextmanager, nullcontext
@@ -89,7 +90,10 @@ def standalone_context(playwright, channel, headless=False, user_agent=None, pro
         if not profile_directory and (profile.parent != temp_root or not profile.name.startswith("glados-browser-")):
             raise RuntimeError("Unexpected temporary profile location")
         with profile_lock(profile):
-            args = [executable, f"--user-data-dir={profile}", "--remote-debugging-port=0",
+            with socket.socket() as reservation:
+                reservation.bind(("127.0.0.1", 0))
+                port = reservation.getsockname()[1]
+            args = [executable, f"--user-data-dir={profile}", f"--remote-debugging-port={port}",
                     "--remote-debugging-address=127.0.0.1", "--no-first-run",
                         "--no-default-browser-check", "--new-window", "--window-size=1200,900", "about:blank"]
             if headless:
@@ -100,34 +104,52 @@ def standalone_context(playwright, channel, headless=False, user_agent=None, pro
                 if parsed.scheme not in ("http", "https", "socks5") or not parsed.hostname or parsed.username or parsed.password:
                     raise RuntimeError("Unsupported browser proxy configuration")
                 args.insert(-1, f"--proxy-server={proxy}")
-            active_port = profile / "DevToolsActivePort"
-            active_port.unlink(missing_ok=True)
-            process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            browser = None
+            startup_path = profile / ".glados-browser-startup.log"
             try:
-                deadline = time.monotonic() + 30
-                while not active_port.is_file():
-                    if time.monotonic() >= deadline or process.poll() is not None:
-                        raise RuntimeError("Independent browser did not start")
-                    time.sleep(0.1)
-                port = int(active_port.read_text(encoding="utf-8").splitlines()[0])
-                if not 1 <= port <= 65535:
-                    raise RuntimeError("Invalid browser debugging port")
-                browser = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", timeout=15_000)
-                context = browser.new_context(user_agent=user_agent) if user_agent else browser.contexts[0]
-                yield context
-            finally:
-                if browser:
+                with open(startup_path, "wb") as startup_log:
+                    process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=startup_log)
+                    browser = None
                     try:
-                        browser.new_browser_cdp_session().send("Browser.close")
-                    except Exception:
-                        pass
-                    browser.close()
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.terminate()
-                    process.wait(timeout=10)
+                        deadline = time.monotonic() + 30
+                        while True:
+                            log = startup_path.read_text(encoding="utf-8", errors="replace")
+                            match = re.search(r"DevTools listening on (ws://127\.0\.0\.1:" + str(port) + r"/devtools/browser/[a-zA-Z0-9-]+)", log)
+                            if match:
+                                break
+                            if time.monotonic() >= deadline or process.poll() is not None:
+                                raise RuntimeError("Independent browser did not start")
+                            time.sleep(0.1)
+                        # This exact endpoint was emitted by OUR newly started
+                        # process, rather than discovered from another browser.
+                        browser = playwright.chromium.connect_over_cdp(match.group(1), timeout=15_000)
+                        context = browser.new_context(user_agent=user_agent) if user_agent else browser.contexts[0]
+                        yield context
+                    finally:
+                        if browser:
+                            try:
+                                browser.new_browser_cdp_session().send("Browser.close")
+                            except Exception:
+                                pass
+                            try:
+                                browser.close()
+                            except Exception:
+                                pass
+                        try:
+                            process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            process.terminate()
+                            process.wait(timeout=10)
+            finally:
+                # Windows child processes can release inherited log handles a
+                # moment after the main browser process has exited.
+                for attempt in range(50):
+                    try:
+                        startup_path.unlink(missing_ok=True)
+                        break
+                    except PermissionError:
+                        if attempt == 49:
+                            raise
+                        time.sleep(0.1)
 
 
 def parse_cookies(header):
