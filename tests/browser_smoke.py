@@ -5,7 +5,7 @@ import unittest
 
 from playwright.sync_api import sync_playwright
 
-from browser_checkin import BASE_URL, CHECKIN_PATH, submit_page
+from browser_checkin import BASE_URL, CHECKIN_PATH, standalone_context, submit_page
 
 
 class BrowserSmoke(unittest.TestCase):
@@ -22,10 +22,7 @@ class BrowserSmoke(unittest.TestCase):
                 ''')
 
         with sync_playwright() as playwright:
-            with playwright.chromium.launch(
-                channel=os.environ.get("GLADOS_BROWSER_CHANNEL", "chrome"), headless=True,
-            ) as browser:
-                with browser.new_context() as context:
-                    context.route(BASE_URL + "/**", fixture)
-                    self.assertEqual(submit_page(context), {"code": 0, "points": 10, "_browser_verification": "unknown"})
+            with standalone_context(playwright, os.environ.get("GLADOS_BROWSER_CHANNEL", "chrome"), headless=True) as context:
+                context.route(BASE_URL + "/**", fixture)
+                self.assertEqual(submit_page(context), {"code": 0, "points": 10, "_browser_verification": "unknown"})
         self.assertEqual(submissions, [BASE_URL + CHECKIN_PATH])
