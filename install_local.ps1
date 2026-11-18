@@ -50,7 +50,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install dependencies.' }
     proxy = $Proxy
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $appRoot 'settings.json') -Encoding UTF8
 $action = New-ScheduledTaskAction -Execute (Join-Path $venv 'Scripts/pythonw.exe') -Argument ('"' + (Join-Path $appRoot 'run_local.py') + '"') -WorkingDirectory $appRoot
-$triggers = @($RunTimes | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
+$triggers = @($RunTimes | ForEach-Object {
+    $at = [datetime]::ParseExact($_, 'HH:mm', [Globalization.CultureInfo]::InvariantCulture)
+    New-ScheduledTaskTrigger -Daily -At $at
+})
 $account = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
