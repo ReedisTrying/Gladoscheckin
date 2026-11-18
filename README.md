@@ -1,3 +1,41 @@
+### 2026-11 签到接口说明
+
+默认域名为用户实际使用的 `https://glados.network`，可通过 `GLADOS_BASE_URL` 选择 `https://glados.cloud` 或 `https://glados.rocks`。
+默认模式使用独立 Chrome 进程打开官网签到页，让页面自行完成 challenge、验证和表单提交。
+每个账号使用临时浏览器会话；不会连接你正在使用的浏览器，也不会读取或修改你的个人浏览器配置。
+脚本只点击一次签到按钮，以官网真实 POST 响应判断结果；不会控制验证组件、伪造验证令牌或在结果不确定时反复提交。
+GitHub Actions 使用 Windows runner 上预装的 Chrome。脚本可在本机运行，但需要安装 Chrome。
+
+`GLADOS_BROWSER_CHANNEL` 可设为 `chrome`（默认）或 `msedge`；`GLADOS_BROWSER_HEADLESS` 默认为 `false`。
+需要使用已有代理时，单独为脚本配置 `GLADOS_BROWSER_PROXY`，例如本机 HTTP 代理地址；不会修改系统或个人浏览器设置。代理地址不支持内嵌用户名密码，避免凭据暴露在进程参数中。
+`CHECKIN_MODE=http` 可显式选择纯 HTTP 模式；该模式在服务端要求 Turnstile 时停止提交，返回退出码 2。
+无论在哪运行，都不保证 Cloudflare 每天放行；官网返回“今日已签”只确认已有记录，不代表本次新增积分。
+日志中的 `tsState` 和 `turnstile_present` 仅显示验证状态，不输出验证令牌、Cookie 或浏览器截图。
+
+运行方式：`python -m pip install -r requirements.txt`，配置 `COOKIES` 后执行 `python checkin.py`。
+可选 `USER_AGENTS` 使用取得 Cookie 的浏览器的真实 User-Agent；多账号可每行一个，单行配置应用于所有账号。
+Cookie 必须包含当前登录会话的完整值（例如 `gld:sess` 和 `gld:sess.sig`），不要把真实值提交到仓库或日志。
+
+Actions 的 **Run workflow** 提供 `status_only`：勾选后只读查询，不执行签到，也不能用来证明今日已签。
+手动运行默认不发送通知，按需勾选 `notify`；GitHub 云端定时签到已停用，保留代码检查与手动诊断。
+`CHECKIN_STATUS_ONLY=true` 提供同等命令行只读模式。
+
+退出码：0 表示签到成功、已签，或显式只读查询成功；1 表示请求/认证/结果异常；2 表示需要官网浏览器验证。
+失败和需验证结果均保留为 Actions 失败，不会通过忽略退出码把任务变绿。
+
+本地回归检查：`python -m unittest discover -s tests -v`。PR 的测试不读取账号 Secrets，也不访问签到接口。
+
+### 本机专用浏览器模式
+
+当云端浏览器仍无法完成验证时，可在 Windows 本机运行 `python local_checkin.py --login`。
+请在脚本新建的专用窗口中登录一次；脚本不会填写密码或操作人机验证组件。
+登录状态只保存在专用浏览器目录（默认 `%LOCALAPPDATA%/GLaDOSCheckin/BrowserProfile`），不导出 Cookie。
+之后执行 `python local_checkin.py` 会使用该专用配置完成官网正常签到；本机运行需要电脑开机和可用桌面会话。
+执行 `install_local.ps1` 可部署本机计划任务 `Codex-GLaDOS-Checkin`，默认每天北京时间 12:07、18:07 运行。需电脑开机、桌面已登录以及配置的代理可用；关闭电脑时不能执行。
+安装器使用独立 Python 环境和专用浏览器配置，不创建 GitHub self-hosted runner。日常日志在 `%LOCALAPPDATA%/GLaDOSCheckin/Logs`，设置在同目录的 `settings.json`，其中不保存明文 Cookie 或密码。
+目录带所有权标记，拒绝使用已有的个人浏览器目录；并发运行同一个专用配置会立即停止。
+本机离线浏览器检查：`python -m unittest discover -s tests -p browser_smoke.py -v`，不访问真实签到接口。
+
 ### 添加**secret**
 
 1. 跳转至自己的仓库的`Settings`->`Secrets and variables`->`Action`
@@ -39,3 +77,5 @@
 ## 声明
 
 本项目不保证稳定运行与更新, 因GitHub相关规定可能会删库, 请注意备份
+
+本机启动器 `run_local.py` 使用 pythonw 运行，避免弹出终端窗口；浏览器窗口仅属于本任务的专用配置。`install_local.ps1 -ProfileSource <已验证专用配置目录> -Proxy <已有代理地址>` 可迁移已登录的专用会话。
