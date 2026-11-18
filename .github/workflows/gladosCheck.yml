@@ -2,6 +2,22 @@ name: auto check
 
 on:
   workflow_dispatch:
+    inputs:
+      status_only:
+        description: '仅查询账户状态（不签到）'
+        type: boolean
+        default: false
+      notify:
+        description: '手动运行时发送 PushDeer 通知'
+        type: boolean
+        default: false
+
+  pull_request:
+    paths:
+      - 'checkin.py'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/**'
 
   push:
     branches:
@@ -16,14 +32,29 @@ on:
 
 
 concurrency:
-  group: glados-checkin
+  group: glados-checkin-${{ github.ref }}
   cancel-in-progress: false
 
 
 jobs:
 
+  test:
+    name: Regression tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
   checkin:
     name: glados checkin
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     timeout-minutes: 10
@@ -44,13 +75,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          python -m pip install -r requirements.txt
 
       - name: Run GLaDOS checkin
         run: python checkin.py
         env:
-          SENDKEY: ${{ secrets.SENDKEY }}
+          PYTHONUTF8: '1'
+          SENDKEY: ${{ (github.event_name != 'workflow_dispatch' || inputs.notify) && secrets.SENDKEY || '' }}
           COOKIES: ${{ secrets.COOKIES }}
+          USER_AGENTS: ${{ secrets.USER_AGENTS }}
+          CHECKIN_STATUS_ONLY: ${{ inputs.status_only || false }}
 
 
   keepalive:
@@ -73,7 +107,7 @@ jobs:
   cleanup:
     name: Delete old workflow runs
 
-    if: always()
+    if: always() && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
 
     needs:
       - checkin
